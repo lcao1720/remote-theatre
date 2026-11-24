@@ -1,0 +1,10 @@
+{
+  "name": "remote-theatre",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Watch videos in sync and share screens with remote friends. Static site, peer-to-peer.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Remote Theatre — watch together, anywhere</title>
+<meta name="description" content="Watch videos in sync and share your screen with friends. No install, no account. Peer-to-peer.">
+<meta name="theme-color" content="#0e0f13">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ff5d73'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<!-- PeerJS (pinned). Deferred scripts run in order, before the module below. -->
+<script defer src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script defer type="module" src="app.js"></script>
+</head>
+<body>
+<div id="toasts" aria-live="polite"></div>
+
+<!-- ============ Landing ============ -->
+<main id="view-landing" class="view">
+  <div class="card hero">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><span class="brand-name">Remote Theatre</span></div>
+    <h1>Watch together,<br>wherever you are.</h1>
+    <p class="lead">Paste a link, send the room link to friends. Everyone plays, pauses and seeks in sync — no install, no account, nothing uploaded to a server.</p>
+
+    <label class="field"><span>Your name</span>
+      <input id="landing-name" type="text" maxlength="24" placeholder="e.g. Sam" autocomplete="nickname"></label>
+    <label class="field"><span>Paste a video link</span>
+      <input id="landing-url" type="url" inputmode="url" placeholder="YouTube, .mp4, .webm or .m3u8 link" autocomplete="off"></label>
+    <p id="landing-error" class="error hidden" role="alert"></p>
+
+    <div class="row">
+      <button id="btn-create" class="btn primary big">Create room</button>
+    </div>
+    <div class="row alt">
+      <button id="btn-create-screen" class="btn ghost">Start with screen share only</button>
+      <button id="btn-create-file" class="btn ghost">Local file…</button>
+      <input id="landing-file" type="file" accept="video/*,.mkv" class="hidden">
+    </div>
+    <div class="foot-links">
+      <button id="btn-settings-landing" class="link">Network settings (TURN)</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ Join ============ -->
+<main id="view-join" class="view hidden">
+  <div class="card hero narrow">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><span class="brand-name">Remote Theatre</span></div>
+    <h1>You’re invited</h1>
+    <p class="lead">Room <code id="join-code"></code>. Pick a name and join.</p>
+    <label class="field"><span>Your name</span>
+      <input id="join-name" type="text" maxlength="24" placeholder="e.g. Alex" autocomplete="nickname"></label>
+    <div class="row"><button id="btn-join" class="btn primary big">Join room</button></div>
+    <p id="join-status" class="muted" role="status"></p>
+    <div class="foot-links"><button id="btn-settings-join" class="link">Network settings (TURN)</button></div>
+  </div>
+</main>
+
+<!-- ============ Room ============ -->
+<div id="view-room" class="view hidden">
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><span class="brand-name">Remote Theatre</span></div>
+    <div class="topbar-right">
+      <div id="status" class="status" role="status"><span class="dot"></span><span id="status-text">Connecting…</span></div>
+      <button id="btn-settings" class="btn small ghost" title="Network settings">Settings</button>
+      <button id="btn-leave" class="btn small ghost">Leave</button>
+    </div>
+  </header>
+
+  <section id="invite" class="invite">
+    <div class="invite-label">Invite friends</div>
+    <input id="invite-link" type="text" readonly aria-label="Room link">
+    <button id="btn-copy" class="btn primary big">Copy link</button>
+    <button id="btn-share" class="btn ghost big hidden">Share…</button>
+  </section>
+
+  <div class="layout">
+    <section class="stage-col">
+      <div id="stage" class="stage">
+        <div id="player-host" class="player-host"></div>
+        <div id="screen-wrap" class="screen-wrap hidden">
+          <video id="screen-video" autoplay playsinline></video>
+          <div id="screen-label" class="screen-label"></div>
+        </div>
+        <div id="stage-empty" class="stage-empty">
+          <p id="stage-empty-text">No video yet. Paste a link below, or share your screen.</p>
+        </div>
+        <div id="buffer-note" class="note hidden"></div>
+        <button id="btn-unmute" class="btn primary hidden unmute">Unmute</button>
+        <div id="overlay" class="overlay hidden">
+          <div id="overlay-tap" class="overlay-box">
+            <p id="overlay-msg">Ready when you are.</p>
+            <button id="btn-tap" class="btn primary big">Tap to join playback</button>
+          </div>
+          <div id="overlay-file" class="overlay-box hidden">
+            <p>This room plays a local file. Pick the same file on your device:</p>
+            <p><strong id="file-want"></strong></p>
+            <label class="btn primary big filebtn">Choose file<input id="guest-file" type="file" accept="video/*,.mkv" class="hidden"></label>
+            <p id="file-warn" class="warn hidden"></p>
+          </div>
+        </div>
+        <div id="hostleft" class="overlay hidden">
+          <div class="overlay-box"><h2>Host left</h2><p>The room has closed.</p>
+            <button id="btn-home" class="btn primary">Back to start</button></div>
+        </div>
+        <div id="reactions" class="reactions" aria-hidden="true"></div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-play" class="btn icon" aria-label="Play">▶</button>
+        <span id="time-cur" class="time">0:00</span>
+        <input id="seek" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek">
+        <span id="time-dur" class="time">0:00</span>
+        <button id="btn-mute" class="btn icon small" aria-label="Mute">🔊</button>
+        <input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+        <button id="btn-full" class="btn icon small" aria-label="Fullscreen">⛶</button>
+      </div>
+
+      <div class="toolbar">
+        <button id="btn-screen" class="btn ghost">Share screen</button>
+        <label id="host-only-wrap" class="check hidden"><input id="host-only" type="checkbox"> Host-only controls</label>
+        <span id="lock-note" class="muted hidden">Host-only controls are on.</span>
+      </div>
+
+      <form id="change-form" class="change" autocomplete="off">
+        <input id="change-url" type="url" inputmode="url" placeholder="Change video — paste a link" aria-label="Change video">
+        <button class="btn primary" type="submit">Change video</button>
+        <button id="btn-change-file" class="btn ghost" type="button">Local file…</button>
+        <input id="change-file" type="file" accept="video/*,.mkv" class="hidden">
+      </form>
+      <p id="change-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <aside class="panel">
+      <h2>People <span id="people-count" class="count"></span></h2>
+      <ul id="people" class="people"></ul>
+      <div class="legend muted">ping · drift <span class="pill green">&lt;80</span><span class="pill amber">&lt;250</span><span class="pill red">more</span> ms</div>
+
+      <h2>Chat</h2>
+      <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <input id="chat-input" type="text" maxlength="500" placeholder="Say something…" aria-label="Chat message">
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+      <div id="emoji-bar" class="emoji-bar" aria-label="Reactions"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ============ Settings dialog ============ -->
+<dialog id="settings-dialog">
+  <form method="dialog" id="settings-form">
+    <h2>Network settings</h2>
+    <p class="muted">Default servers: <code>stun:stun.l.google.com:19302</code>, <code>stun:stun.cloudflare.com:3478</code>.
+      If some friends cannot connect (strict NAT, some mobile networks), add a TURN server. Saved only in this browser.</p>
+    <label class="field"><span>TURN URL</span><input id="turn-url" type="text" placeholder="turn:turn.example.com:3478" autocomplete="off"></label>
+    <label class="field"><span>Username</span><input id="turn-user" type="text" autocomplete="off"></label>
+    <label class="field"><span>Credential</span><input id="turn-cred" type="password" autocomplete="off"></label>
+    <p class="muted">Changes apply the next time you create or join a room.</p>
+    <div class="row end">
+      <button type="button" id="settings-cancel" class="btn ghost">Cancel</button>
+      <button type="submit" id="settings-save" class="btn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>
